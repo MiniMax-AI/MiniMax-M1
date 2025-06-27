@@ -302,4 +302,4 @@ Tool name: get_current_weather
 Tool result: resultado2<end_of_sentence>
 ```
 
-Embora esse seja o formato recomendado, desde que a entrada seja clara para o modelo, os valores de `name` e `content` podem ser adaptados conforme a necessidade.
+Embora esse seja o formato recomendado, desde que a entrada seja clara para o modelo, os valores de `name` e `text` podem ser adaptados conforme a necessidade.

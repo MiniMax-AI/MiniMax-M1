@@ -300,4 +300,4 @@ tool name: get_current_weather
 tool result: test_result2<end_of_sentence>
 ```
 
-While we suggest following the above formats, as long as the model input is easy to understand, the specific values of `name` and `content` is entirely up to the caller.
+While we suggest following the above formats, as long as the model input is easy to understand, the specific values of `name` and `text` is entirely up to the caller.
