@@ -18,21 +18,19 @@ from transformers import AutoTokenizer
 def get_default_tools():
     return [
         {
-          {
-            "name": "get_current_weather",
-            "description": "Get the latest weather for a location",
-            "parameters": {
-                "type": "object", 
-                "properties": {
-                    "location": {
-                        "type": "string", 
-                        "description": "A certain city, such as Beijing, Shanghai"
-                    }
-                }, 
-            }
-            "required": ["location"],
-            "type": "object"
+          "name": "get_current_weather",
+          "description": "Get the latest weather for a location",
+          "parameters": {
+              "type": "object", 
+              "properties": {
+                  "location": {
+                      "type": "string", 
+                      "description": "A certain city, such as Beijing, Shanghai"
+                  }
+              }, 
           }
+          "required": ["location"],
+          "type": "object"
         }
     ]
 
@@ -119,11 +117,11 @@ When processed internally by the model, function definitions are converted to a 
 
 ```
 <begin_of_document><beginning_of_sentence>system ai_setting=MiniMax AI
-MiniMax AI是由上海稀宇科技有限公司（MiniMax）自主研发的AI助理。<end_of_sentence>
+MiniMax AI is an AI assistant independently developed by MiniMax. <end_of_sentence>
 <beginning_of_sentence>system tool_setting=tools
 You are provided with these tools:
 <tools>
-{"name": "search_web", "description": "搜索函数。", "parameters": {"properties": {"query_list": {"description": "进行搜索的关键词，列表元素个数为1。", "items": {"type": "string"}, "type": "array"}, "query_tag": {"description": "query的分类", "items": {"type": "string"}, "type": "array"}}, "required": ["query_list", "query_tag"], "type": "object"}}
+{"name": "search_web", "description": "Search function.", "parameters": {"properties": {"query_list": {"description": "Keywords for search, with list element count of 1.", "items": {"type": "string"}, "type": "array"}, "query_tag": {"description": "Classification of the query", "items": {"type": "string"}, "type": "array"}}, "required": ["query_list", "query_tag"], "type": "object"}}
 </tools>
 
 If you need to call tools, please respond with <tool_calls></tool_calls> XML tags, and provide tool-name and json-object of arguments, following the format below:
@@ -131,8 +129,8 @@ If you need to call tools, please respond with <tool_calls></tool_calls> XML tag
 {"name": <tool-name>, "arguments": <args-json-object>}
 ...
 </tool_calls><end_of_sentence>
-<beginning_of_sentence>user name=用户
-OpenAI 和 Gemini 的最近一次发布会都是什么时候?<end_of_sentence>
+<beginning_of_sentence>user name=User
+When were the most recent launch events for OpenAI and Gemini?<end_of_sentence>
 <beginning_of_sentence>ai name=MiniMax AI
 ```
 

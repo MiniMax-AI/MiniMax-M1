@@ -18,21 +18,19 @@ from transformers import AutoTokenizer
 def get_default_tools():
     return [
         {
-          {
-            "name": "get_current_weather",
-            "description": "Get the latest weather for a location",
-            "parameters": {
-                "type": "object", 
-                "properties": {
-                    "location": {
-                        "type": "string", 
-                        "description": "A certain city, such as Beijing, Shanghai"
-                    }
-                }, 
-            }
-            "required": ["location"],
-            "type": "object"
+          "name": "get_current_weather",
+          "description": "Get the latest weather for a location",
+          "parameters": {
+              "type": "object", 
+              "properties": {
+                  "location": {
+                      "type": "string", 
+                      "description": "A certain city, such as Beijing, Shanghai"
+                  }
+              }, 
           }
+          "required": ["location"],
+          "type": "object"
         }
     ]
 
@@ -54,6 +52,22 @@ text = tokenizer.apply_chat_template(
     add_generation_prompt=True,
     tools=tools
 )
+
+# Enviar solicitação
+import requests
+payload = {
+    "model": "MiniMaxAI/MiniMax-M1-40k",
+    "prompt": text,
+    "max_tokens": 4000
+}
+
+response = requests.post(
+                          "http://localhost:8000/v1/completions",
+                          headers={"Content-Type": "application/json"},
+                          json=payload,
+                          stream=False,
+                        )
+print(response.json()["choices"][0]["text"])
 ```
 
 ## 🛠️ Definição de Function Call
@@ -104,9 +118,9 @@ As funções precisam ser definidas no campo `tools` do corpo da requisição. C
 Internamente, as definições de funções são convertidas para um formato especial e concatenadas ao texto de entrada:
 
 ```
-]~!b[]~b]system ai_setting=MiniMax AI
-MiniMax AI is an AI assistant independently developed by MiniMax. [e~[
-]~b]system tool_setting=tools
+<begin_of_document><beginning_of_sentence>system ai_setting=MiniMax AI
+MiniMax AI is an AI assistant independently developed by MiniMax. <end_of_sentence>
+<beginning_of_sentence>system tool_setting=tools
 You are provided with these tools:
 <tools>
 {"name": "search_web", "description": "Search function.", "parameters": {"properties": {"query_list": {"description": "Keywords for search, with list element count of 1.", "items": {"type": "string"}, "type": "array"}, "query_tag": {"description": "Classification of the query", "items": {"type": "string"}, "type": "array"}}, "required": ["query_list", "query_tag"], "type": "object"}}
@@ -116,10 +130,10 @@ If you need to call tools, please respond with <tool_calls></tool_calls> XML tag
 <tool_calls>
 {"name": <tool-name>, "arguments": <args-json-object>}
 ...
-</tool_calls>[e~[
-]~b]user name=User
-When were the most recent launch events for OpenAI and Gemini?[e~[
-]~b]ai name=MiniMax AI
+</tool_calls><end_of_sentence>
+<beginning_of_sentence>user name=User
+When were the most recent launch events for OpenAI and Gemini?<end_of_sentence>
+<beginning_of_sentence>ai name=MiniMax AI
 ```
 
 ### Formato de Saída do Modelo
@@ -195,23 +209,33 @@ def execute_function_call(function_name: str, arguments: dict):
         # Resultado da execução da função de construção
         return {
             "role": "tool", 
-            "name": function_name, 
-            "content": json.dumps({
-                "location": location, 
-                "temperature": "25", 
-                "unit": "celsius", 
-                "weather": "Sunny"
-            }, ensure_ascii=False)
-        }
+            "content": [
+              {
+                "name": function_name,
+                "type": "text",
+                "text": json.dumps({
+                    "location": location, 
+                    "temperature": "25", 
+                    "unit": "celsius", 
+                    "weather": "Sunny"
+                }, ensure_ascii=False)
+              }
+            ] 
+          }
     elif function_name == "search_web":
         query_list = arguments.get("query_list", [])
         query_tag = arguments.get("query_tag", [])
         # Simular resultados de pesquisa
         return {
             "role": "tool",
-            "name": function_name,
-            "content": f"Search keywords: {query_list}, Categories: {query_tag}\nSearch results: Relevant information found"
-        }
+            "content": [
+              {
+                "name": function_name,
+                "type": "text",
+                "text": f"Search keywords: {query_list}, Categories: {query_tag}\nSearch results: Relevant information found"
+              }
+            ]
+          }
     
     return None
 ```
@@ -226,12 +250,13 @@ Se o modelo solicitar a função `search_web`, retorne no seguinte formato, com 
 
 ```json
 {
-  "data": [
-     {
-       "role": "tool", 
-       "name": "search_web", 
-       "content": "search_result"
-     }
+  "role": "tool", 
+  "content": [
+    {
+      "name": "search_web",
+      "type": "text",
+      "text": "test_result"
+    }
   ]
 }
 ```
@@ -239,34 +264,42 @@ Se o modelo solicitar a função `search_web`, retorne no seguinte formato, com 
 Formato correspondente no input do modelo:
 
 ```
-]~b]tool name=search_web
-search_result[e~[
+<beginning_of_sentence>tool name=tools
+tool name: search_web
+tool result: test_result
+<end_of_sentence>
 ```
 
 #### Vários Resultados
 
-Se o modelo solicitar simultaneamente `search_web` e `get_current_weather`, envie da seguinte forma, usando `name` como "tools" e colocando todos os resultados no campo `content`:
+Se o modelo solicitar simultaneamente `search_web` e `get_current_weather`, envie da seguinte forma, use o campo `content` para conter vários resultados:
 
 ```json
 {
-  "data": [
-     {
-       "role": "tool", 
-       "name": "tools", 
-       "content": "Tool name: search_web\nTool result: test_result1\n\nTool name: get_current_weather\nTool result: test_result2"
-     }
+  "role": "tool", 
+  "content": [
+    {
+      "name": "search_web",
+      "type": "text",
+      "text": "test_result1"
+    },
+    {
+      "name": "get_current_weather",
+      "type": "text",
+      "text": "test_result2"
+    }
   ]
 }
 ```
 
 Formato correspondente no input do modelo:
 ```
-]~b]tool name=tools
+<beginning_of_sentence>tool name=tools
 Tool name: search_web
 Tool result: resultado1
 
 Tool name: get_current_weather
-Tool result: resultado2[e~[
+Tool result: resultado2<end_of_sentence>
 ```
 
 Embora esse seja o formato recomendado, desde que a entrada seja clara para o modelo, os valores de `name` e `content` podem ser adaptados conforme a necessidade.
