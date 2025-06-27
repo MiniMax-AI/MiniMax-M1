@@ -54,6 +54,22 @@ text = tokenizer.apply_chat_template(
     add_generation_prompt=True,
     tools=tools
 )
+
+# Post request
+import requests
+payload = {
+    "model": "MiniMaxAI/MiniMax-M1-40k",
+    "prompt": text,
+    "max_tokens": 4000
+}
+
+response = requests.post(
+                          "http://localhost:8000/v1/completions",
+                          headers={"Content-Type": "application/json"},
+                          json=payload,
+                          stream=False,
+                        )
+print(response.json()["choices"][0]["text"])
 ```
 
 ## 🛠️ Function Call Definition
@@ -102,22 +118,22 @@ Function calls need to be defined in the `tools` field of the request body. Each
 When processed internally by the model, function definitions are converted to a special format and concatenated to the input text:
 
 ```
-]~!b[]~b]system ai_setting=MiniMax AI
-MiniMax AI is an AI assistant independently developed by MiniMax. [e~[
-]~b]system tool_setting=tools
+<begin_of_document><beginning_of_sentence>system ai_setting=MiniMax AI
+MiniMax AI是由上海稀宇科技有限公司（MiniMax）自主研发的AI助理。<end_of_sentence>
+<beginning_of_sentence>system tool_setting=tools
 You are provided with these tools:
 <tools>
-{"name": "search_web", "description": "Search function.", "parameters": {"properties": {"query_list": {"description": "Keywords for search, with list element count of 1.", "items": {"type": "string"}, "type": "array"}, "query_tag": {"description": "Classification of the query", "items": {"type": "string"}, "type": "array"}}, "required": ["query_list", "query_tag"], "type": "object"}}
+{"name": "search_web", "description": "搜索函数。", "parameters": {"properties": {"query_list": {"description": "进行搜索的关键词，列表元素个数为1。", "items": {"type": "string"}, "type": "array"}, "query_tag": {"description": "query的分类", "items": {"type": "string"}, "type": "array"}}, "required": ["query_list", "query_tag"], "type": "object"}}
 </tools>
 
 If you need to call tools, please respond with <tool_calls></tool_calls> XML tags, and provide tool-name and json-object of arguments, following the format below:
 <tool_calls>
 {"name": <tool-name>, "arguments": <args-json-object>}
 ...
-</tool_calls>[e~[
-]~b]user name=User
-When were the most recent launch events for OpenAI and Gemini?[e~[
-]~b]ai name=MiniMax AI
+</tool_calls><end_of_sentence>
+<beginning_of_sentence>user name=用户
+OpenAI 和 Gemini 的最近一次发布会都是什么时候?<end_of_sentence>
+<beginning_of_sentence>ai name=MiniMax AI
 ```
 
 ### Model Output Format
@@ -193,23 +209,33 @@ def execute_function_call(function_name: str, arguments: dict):
         # Build function execution result
         return {
             "role": "tool", 
-            "name": function_name, 
-            "content": json.dumps({
-                "location": location, 
-                "temperature": "25", 
-                "unit": "celsius", 
-                "weather": "Sunny"
-            }, ensure_ascii=False)
-        }
+            "content": [
+              {
+                "name": function_name,
+                "type": "text",
+                "text": json.dumps({
+                    "location": location, 
+                    "temperature": "25", 
+                    "unit": "celsius", 
+                    "weather": "Sunny"
+                }, ensure_ascii=False)
+              }
+            ] 
+          }
     elif function_name == "search_web":
         query_list = arguments.get("query_list", [])
         query_tag = arguments.get("query_tag", [])
         # Simulate search results
         return {
             "role": "tool",
-            "name": function_name,
-            "content": f"Search keywords: {query_list}, Categories: {query_tag}\nSearch results: Relevant information found"
-        }
+            "content": [
+              {
+                "name": function_name,
+                "type": "text",
+                "text": f"Search keywords: {query_list}, Categories: {query_tag}\nSearch results: Relevant information found"
+              }
+            ]
+          }
     
     return None
 ```
@@ -224,47 +250,56 @@ If the model decides to call `search_web`, we suggest you to return the function
 
 ```json
 {
-  "data": [
-     {
-       "role": "tool", 
-       "name": "search_web", 
-       "content": "search_result"
-     }
+  "role": "tool", 
+  "content": [
+    {
+      "name": "search_web",
+      "type": "text",
+      "text": "test_result"
+    }
   ]
 }
 ```
 
 Corresponding model input format:
 ```
-]~b]tool name=search_web
-search_result[e~[
+<beginning_of_sentence>tool name=tools
+tool name: search_web
+tool result: test_result
+<end_of_sentence>
 ```
 
 
 #### Multiple Result
-If the model decides to call `search_web` and `get_current_weather` at the same time, we suggest you to return the multiple function results in the following format, with the `name` field set to "tools", and use the `content` field to contain multiple results.
+If the model decides to call `search_web` and `get_current_weather` at the same time, we suggest you to return the multiple function results in the following format, use the `content` field to contain multiple results.
 
 
 ```json
 {
-  "data": [
-     {
-       "role": "tool", 
-       "name": "tools", 
-       "content": "Tool name: search_web\nTool result: test_result1\n\nTool name: get_current_weather\nTool result: test_result2"
-     }
+  "role": "tool", 
+  "content": [
+    {
+      "name": "search_web",
+      "type": "text",
+      "text": "test_result1"
+    },
+    {
+      "name": "get_current_weather",
+      "type": "text",
+      "text": "test_result2"
+    }
   ]
 }
 ```
 
 Corresponding model input format:
 ```
-]~b]tool name=tools
-Tool name: search_web
-Tool result: test_result1
+<beginning_of_sentence>tool name=tools
+tool name: search_web
+tool result: test_result1
 
-Tool name: get_current_weather
-Tool result: test_result2[e~[
+tool name: get_current_weather
+tool result: test_result2<end_of_sentence>
 ```
 
 While we suggest following the above formats, as long as the model input is easy to understand, the specific values of `name` and `content` is entirely up to the caller.
